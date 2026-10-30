@@ -81,6 +81,14 @@ header{padding:20px 24px 18px}header h1{margin:0;font-weight:650;letter-spacing:
 @media(max-width:960px){.side-charts>section:last-child{min-height:0}.manager-table-wrap{margin-top:10px}}
 @media(max-width:430px){.manager-table col:first-child{width:28%}.manager-table col{width:18%}.manager-table{min-width:0;border-spacing:2px 4px;font-size:11px}.manager-table th,.manager-table td{padding:6px 3px}.manager-table thead th{font-size:10px;padding-left:1px;padding-right:1px}.manager-sort-label{letter-spacing:-.35px}.manager-given{font-size:11px}.manager-family{font-size:10px}.manager-unit{font-size:9px}.side-card{padding:16px 12px 13px}header{padding:17px 16px}}
 
+
+/* The map fills its card while its SVG stays out of intrinsic grid sizing. */
+.dashboard-grid>.chart-card{display:flex;flex-direction:column;min-height:0}
+.dashboard-grid>.chart-card>.chart-wrap{position:relative;flex:1 1 0%;min-height:500px}
+#chart{position:absolute;inset:0;min-width:720px}
+.dashboard-grid>.chart-card>.detail{flex:0 0 auto}
+@media(max-width:1210px){.dashboard-grid>.chart-card>.chart-wrap{min-height:clamp(500px,56vw,720px)}}
+
 </style>
 </head>
 <body>
@@ -134,7 +142,7 @@ header{padding:20px 24px 18px}header h1{margin:0;font-weight:650;letter-spacing:
  const minArea=Math.min(...data.map(a=>a.area)),maxArea=Math.max(...data.map(a=>a.area));
  const radius=()=>8.5;
  let areaLow=minArea,areaHigh=maxArea,managerFilter=null,periodFilter=null;
- let active='all',roomFilter=null,statusFilter=null,selected=null,lastWidth=0,zoom=null,pointerGesture=false,suppressClickUntil=0,cancelGesture=()=>{};
+ let active='all',roomFilter=null,statusFilter=null,selected=null,lastWidth=0,lastHeight=0,zoom=null,pointerGesture=false,suppressClickUntil=0,cancelGesture=()=>{};
  const node=(tag,attrs={},text)=>{const e=document.createElementNS(ns,tag);Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v));if(text!==undefined)e.textContent=text;return e;};
  const current=({ignoreManager=false,ignorePeriod=false}={})=>data.filter(a=>(active==='all'||a.corp===active)&&(roomFilter===null||a.rooms===roomFilter)&&(statusFilter===null||a.sold===(statusFilter==='sold'))&&a.area>=areaLow&&a.area<=areaHigh&&(ignoreManager||managerFilter===null||(a.sold&&(a.manager||'Не указан')===managerFilter))&&(ignorePeriod||periodFilter===null||(a.sold&&a.date&&dateValue(a)>=periodFilter.start&&dateValue(a)<periodFilter.end)));
  const stops=[[220,55,51],[118,30,36],[0,0,0]];
@@ -150,9 +158,10 @@ header{padding:20px 24px 18px}header h1{margin:0;font-weight:650;letter-spacing:
  function label(a){return `${a.id}, ${a.corp}, ${a.floor} этаж, ${a.rooms} комн., ${dec.format(a.area)} м², ${fmt.format(a.price)} ₽/м², ${a.sold?'продана':'не продана'}`;}
  function showTip(a,x,y){tip.replaceChildren();const title=document.createElement('strong');title.textContent=a.id;title.style.color=areaColor(a);tip.append(title);const status=document.createElement('div');status.className='tip-status';status.textContent=a.sold?'Продана · залитая фигура':'Не продана · залита наполовину';tip.append(status);const dl=document.createElement('dl');const rows=[['Корпус / этаж',`${a.corp} / ${a.floor}`],['Комнат',a.rooms],['Площадь',`${dec.format(a.area)} м²`],['Цена за м²',`${fmt.format(a.price)} ₽`],['Стоимость',`${dec.format(a.cost/1e6)} млн ₽`],['Вид',a.view||'—']];if(a.sold)rows.push(['Менеджер',a.manager||'Не указан'],['Сумма сделки',`${dec.format(a.deal/1e6)} млн ₽`],['Дата сделки',new Date(a.date.replace(' ','T')).toLocaleDateString('ru-RU')],['Дней в работе',a.days??'—']);for(const[k,v]of rows){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=k;dd.textContent=v;dl.append(dt,dd);}tip.append(dl);tip.hidden=false;const r=tip.getBoundingClientRect();tip.style.left=Math.max(10,Math.min(x+16,innerWidth-r.width-10))+'px';tip.style.top=Math.max(10,Math.min(y+16,innerHeight-r.height-10))+'px';}
  function select(a){selected=selected===a.id?null:a.id;chart.querySelectorAll('.apartment').forEach(e=>{const on=e.dataset.id===selected;e.classList.toggle('selected',on);e.setAttribute('aria-pressed',String(on));});detail.replaceChildren();if(selected){const b=document.createElement('b');b.textContent=a.id;detail.append(b,` · ${a.corp} · ${a.floor} этаж · ${a.rooms} комн. · ${dec.format(a.area)} м² · ${fmt.format(a.price)} ₽/м² · ${a.view} · ${a.sold?'продана':'не продана'}`);}else detail.textContent='Наведите на квартиру для подробностей. Нажмите, чтобы закрепить её характеристики.';}
+ const mapDimensions=()=>{const width=Math.max(720,chart.clientWidth);return {width,height:Math.max(500,chart.clientHeight||Math.min(720,Math.round(width*.56)))};};
  function draw(){
   cancelGesture();
-  const width=Math.max(720,chart.clientWidth),height=Math.max(500,Math.min(720,Math.round(width*.56))),left=75,right=28,top=25,bottom=62,pw=width-left-right,ph=height-top-bottom;
+  const {width,height}=mapDimensions(),left=75,right=28,top=25,bottom=62,pw=width-left-right,ph=height-top-bottom;
   const view=zoom||{minX,maxX,minY:0,maxY};
   const x=v=>left+(v-view.minX)/(view.maxX-view.minX)*pw,y=v=>top+ph-(v-view.minY)/(view.maxY-view.minY)*ph;
   const invX=px=>view.minX+(px-left)/pw*(view.maxX-view.minX),invY=py=>view.minY+(top+ph-py)/ph*(view.maxY-view.minY);
@@ -194,7 +203,7 @@ header{padding:20px 24px 18px}header h1{margin:0;font-weight:650;letter-spacing:
   svg.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.id)return;drag.end=clamp(point(e));const dx=Math.abs(drag.end.x-drag.start.x),dy=Math.abs(drag.end.y-drag.start.y);if(!drag.active&&Math.max(dx,dy)>6){drag.active=true;svg.classList.toggle('is-brushing',true);try{svg.setPointerCapture(drag.id);}catch{}}if(!drag.active)return;e.preventDefault();brush.setAttribute('visibility','visible');brush.setAttribute('x',Math.min(drag.start.x,drag.end.x));brush.setAttribute('y',Math.min(drag.start.y,drag.end.y));brush.setAttribute('width',dx);brush.setAttribute('height',dy);});
   svg.addEventListener('pointerup',e=>{if(!drag||e.pointerId!==drag.id)return;const previous=drag;previous.end=clamp(point(e));const dx=Math.abs(previous.end.x-previous.start.x),dy=Math.abs(previous.end.y-previous.start.y);cancelGesture();if(!previous.active)return;suppressClickUntil=Date.now()+350;e.preventDefault();if(dx<10||dy<10)return;const next={minX:invX(Math.min(previous.start.x,previous.end.x)),maxX:invX(Math.max(previous.start.x,previous.end.x)),minY:invY(Math.max(previous.start.y,previous.end.y)),maxY:invY(Math.min(previous.start.y,previous.end.y))};if(next.maxX-next.minX<.1||next.maxY-next.minY<.5)return;zoom=next;selected=null;detail.textContent='Наведите на квартиру для подробностей. Нажмите, чтобы закрепить её характеристики.';draw();});
   svg.addEventListener('pointercancel',()=>cancelGesture());svg.addEventListener('lostpointercapture',()=>cancelGesture());svg.addEventListener('pointerleave',()=>{if(drag&&!drag.active)cancelGesture();});
-  chart.replaceChildren(svg);lastWidth=width;drawSideCharts();
+  chart.replaceChildren(svg);lastWidth=width;lastHeight=height;drawSideCharts();
  }
 
  // Three companion charts share the existing corpus, room and sale-status filters.
@@ -364,7 +373,7 @@ header{padding:20px 24px 18px}header h1{margin:0;font-weight:650;letter-spacing:
  document.querySelectorAll('[data-room]').forEach(b=>b.addEventListener('click',()=>{const value=Number(b.dataset.room);roomFilter=roomFilter===value?null:value;applyLegend();}));
  document.querySelectorAll('[data-status]').forEach(b=>b.addEventListener('click',()=>{statusFilter=statusFilter===b.dataset.status?null:b.dataset.status;applyLegend();}));
  resetZoom.addEventListener('click',()=>{zoom=null;tip.hidden=true;draw();});
- document.addEventListener('keydown',e=>{if(e.key==='Escape'){tip.hidden=true;cancelGesture();}});new ResizeObserver(()=>{if(Math.abs(Math.max(720,chart.clientWidth)-lastWidth)>1){tip.hidden=true;draw();}}).observe(chart);draw();
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'){tip.hidden=true;cancelGesture();}});new ResizeObserver(()=>{const {width,height}=mapDimensions();if(Math.abs(width-lastWidth)>1||Math.abs(height-lastHeight)>1){tip.hidden=true;draw();}}).observe(chart);draw();
 })();
 </script>
 </body>
